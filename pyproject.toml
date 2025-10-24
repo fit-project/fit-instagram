@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "fit-instagram"
+version = "3.0.0-alpha.1"
+description = "FIT instagram Scraper Module"
+authors = ["FIT Project"]
+license = "LGPL-3.0-or-later"
+packages = [
+    { include = "fit_instagram" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+PySide6 = "^6.9.0"
+
+
+fit-scraper = {git = "https://github.com/fit-project/fit-scraper.git", rev = "main"}
+pyinstaller = "^6.16.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
