@@ -10,6 +10,7 @@
 import logging
 
 from fit_common.core import get_version
+from fit_common.gui.ui_translation import translate_ui
 from fit_scraper.scraper import Scraper
 from PySide6 import QtCore, QtWidgets
 
@@ -27,6 +28,7 @@ class Instagram(Scraper):
         if self.has_valid_case:
             self.__translations = load_translations()
             self.__init_ui()
+            translate_ui(self.__translations, self)
 
     def __init_ui(self):
         # HIDE STANDARD TITLE BAR
@@ -47,6 +49,9 @@ class Instagram(Scraper):
 
         # CONFIGURATION BUTTON
         self.ui.configuration_button.clicked.connect(self.configuration_dialog)
+
+        # CASE BUTTON
+        self.ui.case_button.clicked.connect(self.show_case_info)
 
         # HIDE PROGRESS BAR
         self.ui.progress_bar.setValue(0)

@@ -501,7 +501,7 @@ sqlalchemy = "^2.0.40"
 type = "git"
 url = "https://github.com/fit-project/fit-cases.git"
 reference = "main"
-resolved_reference = "203071fe3050d4c37b9dda686d7e281ebb88e607"
+resolved_reference = "3c5ad95a98a6274576396d1024e916d789adfe1e"
 
 [[package]]
 name = "fit-common"
@@ -527,7 +527,7 @@ xhtml2pdf = "^0.2.17"
 type = "git"
 url = "https://github.com/fit-project/fit-common.git"
 reference = "main"
-resolved_reference = "933752964ede59c38c891dcef6f7197f466f18ed"
+resolved_reference = "d16553d9f04be485587258eb2c83ed7766e540da"
 
 [[package]]
 name = "fit-configurations"
