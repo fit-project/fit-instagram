@@ -9,16 +9,16 @@
 
 from fit_acquisition.tasks.task_worker import TaskWorker
 
-from fit_mail.lang import load_translations
+from fit_instagram.lang import load_translations
 
 
-class MailLogoutWorker(TaskWorker):
+class InstagramLogoutWorker(TaskWorker):
     def __init__(self):
         super().__init__()
         self.__translations = load_translations()
 
     def start(self):
-        service = self.options.get("mail_service")
+        service = self.options.get("instagram_service")
         try:
             service.logout()
             self.finished.emit()

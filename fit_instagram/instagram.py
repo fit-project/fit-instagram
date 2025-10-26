@@ -10,12 +10,17 @@
 import logging
 
 from fit_common.core import get_version
+from fit_common.gui.error import Error
+from fit_common.gui.spinner import Spinner
 from fit_common.gui.ui_translation import translate_ui
 from fit_scraper.scraper import Scraper
 from PySide6 import QtCore, QtWidgets
 
+from fit_instagram.instagram_service import InstagramService
 from fit_instagram.instagram_ui import Ui_fit_instagram
 from fit_instagram.lang import load_translations
+from fit_instagram.workers.login import InstagramLoginWorker
+from fit_instagram.workers.logout import InstagramLogoutWorker
 
 
 class Instagram(Scraper):
@@ -27,6 +32,8 @@ class Instagram(Scraper):
 
         if self.has_valid_case:
             self.__translations = load_translations()
+            self.__instagram_service = None
+            self._is_logged_in = False
             self.__init_ui()
             translate_ui(self.__translations, self)
 
@@ -37,6 +44,7 @@ class Instagram(Scraper):
 
         self.ui = Ui_fit_instagram()
         self.ui.setupUi(self)
+        self.__spinner = Spinner(self)
 
         # CUSTOM TOP BAR
         self.ui.left_box.mouseMoveEvent = self.move_window
@@ -70,7 +78,7 @@ class Instagram(Scraper):
         for field in self.login_configuration_fields:
             field.textChanged.connect(self.__enable_login_button)
 
-        self.ui.login_button.clicked.connect(self.__login)
+        self.ui.login_button.clicked.connect(self.__on_login_logout_clicked)
         self.ui.start_acquisition_button.clicked.connect(self.__start_acquisition)
 
         # ACQUISITION CRITERIA
@@ -90,12 +98,14 @@ class Instagram(Scraper):
             event.accept()
 
     def __enable_login_button(self):
-        pass
+        all_field_filled = all(
+            input_field.text() for input_field in self.login_configuration_fields
+        )
+        self.ui.login_button.setEnabled(all_field_filled)
 
-    #     all_field_filled = all(
-    #         input_field.text() for input_field in self.login_configuration_fields
-    #     )
-    #     self.login_button.setEnabled(all_field_filled)
+    def __enable_login_configuration_fields(self, enable):
+        for input_field in self.login_configuration_fields:
+            input_field.setEnabled(enable)
 
     def __uncheck_checkboxes(self):
         pass
@@ -135,30 +145,98 @@ class Instagram(Scraper):
 
     #     self.acquisition_manager.scraped_status.connect(self.__scraped_status)
 
+    def __on_login_logout_clicked(self):
+        if self._is_logged_in:
+            self.__logout()
+        else:
+            self.__login()
+
     def __login(self):
-        pass
+        self.setEnabled(False)
+        self.__spinner.start()
 
-    #     self.start_acquisition_button.setEnabled(True)
-    #     self.acquisition_status.setEnabled(False)
-    #     self.__uncheck_checkboxes()
-    #     self.__enable_all(False)
-    #     self.__start_spinner()
-    #     self.progress_bar.setValue(0)
-    #     self.progress_bar.setHidden(False)
-    #     self.status_message.setText("")
-    #     self.status_message.setHidden(False)
-    #     self.acquisition_status_list.clear()
+        self.__instagram_service = InstagramService()
+        self._thread: QtCore.QThread | None = None
+        self._worker: InstagramLoginWorker | None = None
 
-    #     if self.is_task_started is False:
-    #         self.__start_task()
-    #     else:
-    #         self.acquisition_manager.options["auth_info"] = {
-    #             "username": self.username.text(),
-    #             "password": self.password.text(),
-    #             "profile": self.profile_name.text(),
-    #         }
+        self._thread = QtCore.QThread()
+        self._worker = InstagramLoginWorker()
 
-    #         self.acquisition_manager.login()
+        self._worker.options = dict()
+
+        self._worker.options = {
+            "auth_info": {
+                "username": self.ui.username.text(),
+                "password": self.ui.password.text(),
+                "profile": self.ui.profile_name.text(),
+            },
+            "instagram_service": self.__instagram_service,
+        }
+
+        self._worker.moveToThread(self._thread)
+
+        self._thread.started.connect(self._worker.start)
+        self._worker.finished.connect(self.__is_logged_in)
+        self._worker.error.connect(self.__handle_error)
+
+        # Pulizia quando il thread finisce
+        self._worker.finished.connect(self._thread.quit)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._worker.finished.connect(self._worker.deleteLater)
+
+        self._worker.error.connect(self._thread.quit)
+        self._worker.error.connect(self._worker.deleteLater)
+
+        self._thread.start()
+
+    def __is_logged_in(self, account_type):
+        self.setEnabled(True)
+        self.__spinner.stop()
+        self._is_logged_in = True
+        self.ui.login_button.setText(self.__translations["LOGOUT_BUTTON"])
+        self.__enable_login_configuration_fields(False)
+        self.__enable_acquisition_checkbox_from_account_type(account_type)
+
+    def __logout(self):
+        self.setEnabled(False)
+        self.__spinner.start()
+        self._thread: QtCore.QThread | None = None
+        self._worker: InstagramLogoutWorker | None = None
+
+        self._thread = QtCore.QThread()
+        self._worker = InstagramLogoutWorker()
+
+        self._worker.options = dict()
+        self._worker.options = {
+            "instagram_service": self.__instagram_service,
+        }
+        self._is_logged_in = False
+        self._worker.moveToThread(self._thread)
+
+        self._thread.started.connect(self._worker.start)
+        self._worker.finished.connect(self.__is_logged_out)
+        self._worker.error.connect(self.__handle_error)
+
+        # Pulizia quando il thread finisce
+        self._worker.finished.connect(self._thread.quit)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._worker.finished.connect(self._worker.deleteLater)
+
+        self._worker.error.connect(self._thread.quit)
+        self._worker.error.connect(self._worker.deleteLater)
+
+        self._thread.start()
+
+    def __is_logged_out(self):
+        self.setEnabled(True)
+        self.__spinner.stop()
+        self._is_logged_in = False
+        self.ui.login_button.setText(self.__translations["LOGIN_BUTTON"])
+        self.__enable_login_configuration_fields(True)
+        self.__instagram_service = None
+        self.ui.status_message.setText("")
+        self.ui.status_message.setHidden(True)
+        self.ui.login_button.setText(self.__translations["LOGIN_BUTTON"])
 
     # def __is_logged_in(self, __status, __account_type):
     #     self.spinner.stop()
@@ -194,21 +272,26 @@ class Instagram(Scraper):
     #     self.is_task_started = True
     #     self.__login()
 
-    # def __enable_acquisition_checkbox_from_account_type(self, account_type):
-    #     checkboxes = self.acquisition_criteria.findChildren(QtWidgets.QCheckBox)
+    def __enable_acquisition_checkbox_from_account_type(self, account_type):
 
-    #     checkbox = next(
-    #         filter(lambda checkbox: checkbox.text() == instagram.SAVED, checkboxes),
-    #         None,
-    #     )
+        if account_type == 1:
+            self.ui.acquisition_criteria.setEnabled(True)
+            self.ui.acquisition_status.setEnabled(True)
+        elif account_type == 2 or account_type == 4:
+            self.ui.scrape_saved_posts.setEnabled(False)
+            self.ui.acquisition_criteria.setEnabled(True)
+            self.ui.acquisition_status.setEnabled(True)
 
-    #     if account_type == 1:
-    #         self.acquisition_criteria.setEnabled(True)
-    #         self.acquisition_status.setEnabled(True)
-    #     elif account_type == 2 or account_type == 4:
-    #         self.scrape_saved_posts.setEnabled(False)
-    #         self.acquisition_criteria.setEnabled(True)
-    #         self.acquisition_status.setEnabled(True)
+    def __handle_error(self, error):
+        self.setEnabled(True)
+        self.__spinner.stop()
+        dialog = Error(
+            QtWidgets.QMessageBox.Icon.Critical,
+            error.get("title"),
+            error.get("msg"),
+            error.get("details"),
+        )
+        dialog.exec()
 
     def __start_acquisition(self):
         pass

@@ -759,6 +759,24 @@ files = [
 ]
 
 [[package]]
+name = "instaloader"
+version = "4.14.2"
+description = "Download pictures (or videos) along with their captions and other metadata from Instagram."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "instaloader-4.14.2-py3-none-any.whl", hash = "sha256:e8c72410405fcbfd16c6e0034a10bccce634d91d59b1b0664b7de813be9d27fd"},
+    {file = "instaloader-4.14.2.tar.gz", hash = "sha256:e9205098e6ec494cdfe2aef6c56805084cef4008a06d4d78504301f42f8e4d33"},
+]
+
+[package.dependencies]
+requests = ">=2.25"
+
+[package.extras]
+browser-cookie3 = ["browser_cookie3 (>=0.19.1)"]
+
+[[package]]
 name = "ipaddress"
 version = "1.0.23"
 description = "IPv4/IPv6 manipulation library"
@@ -2589,4 +2607,4 @@ test = ["coverage (>=5.3)", "tomli (>=2.0.1) ; python_version < \"3.11\"", "tox"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "c5724807d14fc442843dea128637c08960d2c1864046457478a31020dfd4abd2"
+content-hash = "03e11da9a8f7c23f04e40ca4e8b33287d761b52f6ed6d18bf59ab26b29dcd7b7"
