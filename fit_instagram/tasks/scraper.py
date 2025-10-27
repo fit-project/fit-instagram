@@ -32,8 +32,6 @@ class TaskInstagramScraperWorker(TaskWorker):
 
         service.set_dir(profile_dir)
 
-        methods_to_execute = ["scrape_post"]
-
         for method in methods_to_execute:
 
             __scraped_status = {"method": method}
