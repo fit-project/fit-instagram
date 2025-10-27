@@ -59,5 +59,9 @@
   "SCRAPE_TAGGED_POSTS": "Tagged posts",
   "ACQUISITION_STATUS_TITLE": "Acquisition Status",
   "START_ACQUISITION_BUTTON": "Start acquisition",
-  "HANDLE_429": "Instagram responded with HTTP error \"429 - Too Many Requests\".<br>Please wait a few minutes (5/6) and do not run FIT multiple times in parallel or within short sequence.<br>Also, do not use any Instagram App while FIT is running."
+  "HANDLE_429": "Instagram responded with HTTP error \"429 - Too Many Requests\".<br>Please wait a few minutes (5/6) and do not run FIT multiple times in parallel or within short sequence.<br>Also, do not use any Instagram App while FIT is running.",
+  "INSTAGRAM_SCRAPER": "Instagram scraper",
+  "INSTAGRAM_SCRAPER_STARTED": "Instagram Scraper started",
+  "INSTAGRAM_SCRAPER_COMPLETED": "{} Instagram Scraper completed",
+  "INSTAGRAM_SCRAPER_SCRAPE": "Scraping profile: {}"
 }

@@ -57,5 +57,9 @@
   "ACQUISITION_STATUS_TITLE": "Stato acquisizione",
   "START_ACQUISITION_BUTTON": "Avvia acquisizione",
   "STATUS_MESSAGE": "messaggio di stato",
-  "HANDLE_429": "Instagram ha risposto con l’errore HTTP \"429 - Troppe richieste\".<br>Attendi alcuni minuti (5/6) e non eseguire FIT più volte in parallelo o in rapida successione.<br>Inoltre, non utilizzare alcuna app di Instagram mentre FIT è in esecuzione."
+  "HANDLE_429": "Instagram ha risposto con l’errore HTTP \"429 - Troppe richieste\".<br>Attendi alcuni minuti (5/6) e non eseguire FIT più volte in parallelo o in rapida successione.<br>Inoltre, non utilizzare alcuna app di Instagram mentre FIT è in esecuzione.",
+  "INSTAGRAM_SCRAPER": "Instagram scraper",
+  "INSTAGRAM_SCRAPER_STARTED": "Scraper di Instagram avviato",
+  "INSTAGRAM_SCRAPER_COMPLETED": "{} Scraper di Instagram completato",
+  "INSTAGRAM_SCRAPER_SCRAPE": "Analisi del profilo: {}"
 }

@@ -8,11 +8,14 @@
 ######
 
 import logging
+import os
 
+from fit_acquisition.class_names import class_names
 from fit_common.core import get_version
 from fit_common.gui.error import Error
 from fit_common.gui.spinner import Spinner
 from fit_common.gui.ui_translation import translate_ui
+from fit_common.gui.utils import Status
 from fit_scraper.scraper import Scraper
 from PySide6 import QtCore, QtWidgets
 
@@ -26,11 +29,13 @@ from fit_instagram.workers.logout import InstagramLogoutWorker
 class Instagram(Scraper):
     def __init__(self, wizard=None):
         logger = logging.getLogger("scraper.instagram")
-        packages = []
+        packages = ["fit_instagram.tasks"]
 
-        super().__init__(logger, "email", packages, wizard)
+        super().__init__(logger, "instagram", packages, wizard)
 
         if self.has_valid_case:
+            class_names.register("INSTAGRAM_SCRAPER", "TaskInstagramScraper")
+            self.acquisition.stop_tasks = [class_names.INSTAGRAM_SCRAPER]
             self.__translations = load_translations()
             self.__instagram_service = None
             self._is_logged_in = False
@@ -97,54 +102,6 @@ class Instagram(Scraper):
             self.dragPos = event.globalPosition().toPoint()
             event.accept()
 
-    def __enable_login_button(self):
-        all_field_filled = all(
-            input_field.text() for input_field in self.login_configuration_fields
-        )
-        self.ui.login_button.setEnabled(all_field_filled)
-
-    def __enable_login_configuration_fields(self, enable):
-        for input_field in self.login_configuration_fields:
-            input_field.setEnabled(enable)
-
-    def __uncheck_checkboxes(self):
-        pass
-
-    #     for checkbox in self.acquisition_criteria.findChildren(QtWidgets.QCheckBox):
-    #         if checkbox.isChecked():
-    #             checkbox.setChecked(False)
-
-    # def init(self, case_info, wizard, options=None):
-    #     self.acquisition_directory = None
-    #     self.is_task_started = False
-    #     self.is_acquisition_running = False
-    #     self.case_info = case_info
-    #     self.wizard = wizard
-
-    #     self.case_button.clicked.connect(lambda: show_case_info_dialog(self.case_info))
-
-    #     # ACQUISITION
-    #     self.acquisition_manager = InstagramAcquisition(
-    #         logging.getLogger(__name__),
-    #         self.progress_bar,
-    #         self.status_message,
-    #         self,
-    #     )
-
-    #     self.acquisition_manager.start_tasks_is_finished.connect(
-    #         self.__start_task_is_finished
-    #     )
-
-    #     self.acquisition_manager.logged_in.connect(self.__is_logged_in)
-
-    #     self.acquisition_manager.progress.connect(self.__handle_progress)
-
-    #     self.acquisition_manager.post_acquisition_is_finished.connect(
-    #         self.__acquisition_is_finished
-    #     )
-
-    #     self.acquisition_manager.scraped_status.connect(self.__scraped_status)
-
     def __on_login_logout_clicked(self):
         if self._is_logged_in:
             self.__logout()
@@ -179,7 +136,6 @@ class Instagram(Scraper):
         self._worker.finished.connect(self.__is_logged_in)
         self._worker.error.connect(self.__handle_error)
 
-        # Pulizia quando il thread finisce
         self._worker.finished.connect(self._thread.quit)
         self._thread.finished.connect(self._thread.deleteLater)
         self._worker.finished.connect(self._worker.deleteLater)
@@ -196,6 +152,10 @@ class Instagram(Scraper):
         self.ui.login_button.setText(self.__translations["LOGOUT_BUTTON"])
         self.__enable_login_configuration_fields(False)
         self.__enable_acquisition_checkbox_from_account_type(account_type)
+        self.ui.acquisition_status_list.clear()
+        self.ui.start_acquisition_button.setEnabled(True)
+        self.ui.acquisition_status.setEnabled(True)
+        self.__uncheck_checkboxes()
 
     def __logout(self):
         self.setEnabled(False)
@@ -217,7 +177,6 @@ class Instagram(Scraper):
         self._worker.finished.connect(self.__is_logged_out)
         self._worker.error.connect(self.__handle_error)
 
-        # Pulizia quando il thread finisce
         self._worker.finished.connect(self._thread.quit)
         self._thread.finished.connect(self._thread.deleteLater)
         self._worker.finished.connect(self._worker.deleteLater)
@@ -234,43 +193,55 @@ class Instagram(Scraper):
         self.ui.login_button.setText(self.__translations["LOGIN_BUTTON"])
         self.__enable_login_configuration_fields(True)
         self.__instagram_service = None
+        self.ui.acquisition_status_list.clear()
+        self.ui.login_button.setText(self.__translations["LOGIN_BUTTON"])
+        self.ui.start_acquisition_button.setEnabled(False)
+        self.ui.acquisition_status.setEnabled(False)
+
+    def __start_acquisition(self):
+        self.setEnabled(True)
+        self.__spinner.start()
+        self.ui.acquisition_status_list.clear()
+
+        methods_to_execute = ["scrape_profile_picture", "scrape_info"]
+        checkboxes = self.ui.acquisition_criteria.findChildren(QtWidgets.QCheckBox)
+
+        checkboxes_checked = list(
+            filter(lambda checkbox: checkbox.isChecked(), checkboxes)
+        )
+        for checkbox in checkboxes_checked:
+            methods_to_execute.append(checkbox.objectName())
+
+        self.__spinner.stop()
+
+        if self.create_acquisition_directory():
+            self.acquisition.options = {
+                "type": "instagram",
+                "case_info": self.case_info,
+                "acquisition_directory": self.acquisition_directory,
+                "instagram_service": self.__instagram_service,
+                "methods_to_execute": methods_to_execute,
+                "profile_dir": os.path.join(
+                    self.acquisition_directory,
+                    self.ui.profile_name.text(),
+                ),
+            }
+
+            self.execute_start_tasks_flow()
+
+    def on_start_tasks_finished(self):
+        task = self.acquisition.tasks_manager.get_task("TaskInstagramScraper")
+        if task:
+            task.scraped_status.connect(self.__scraped_status)
+
         self.ui.status_message.setText("")
         self.ui.status_message.setHidden(True)
-        self.ui.login_button.setText(self.__translations["LOGIN_BUTTON"])
 
-    # def __is_logged_in(self, __status, __account_type):
-    #     self.spinner.stop()
-    #     self.__enable_all(True)
-    #     self.progress_bar.setHidden(True)
-    #     self.status_message.setHidden(True)
+        return self.execute_stop_tasks_flow()
 
-    #     if __status == status.SUCCESS:
-    #         self.login_configuration.setEnabled(False)
-    #         self.__enable_acquisition_checkbox_from_account_type(__account_type)
-
-    # def __start_task(self):
-    #     if self.acquisition_directory is None:
-    #         # Create acquisition directory
-    #         self.acquisition_directory = CaseController().create_acquisition_directory(
-    #             "instagram",
-    #             GeneralConfigurationController().configuration["cases_folder_path"],
-    #             self.case_info["name"],
-    #             self.profile_name.text(),
-    #         )
-
-    #     if self.acquisition_directory is not None:
-    #         if self.is_task_started is False:
-    #             self.acquisition_manager.options = {
-    #                 "acquisition_directory": self.acquisition_directory,
-    #                 "type": "instagram",
-    #                 "case_info": self.case_info,
-    #             }
-    #             self.acquisition_manager.load_tasks()
-    #             self.acquisition_manager.start()
-
-    # def __start_task_is_finished(self):
-    #     self.is_task_started = True
-    #     self.__login()
+    def on_post_acquisition_finished(self):
+        self.__uncheck_checkboxes()
+        return super().on_post_acquisition_finished()
 
     def __enable_acquisition_checkbox_from_account_type(self, account_type):
 
@@ -293,132 +264,78 @@ class Instagram(Scraper):
         )
         dialog.exec()
 
-    def __start_acquisition(self):
-        pass
+    def __enable_login_button(self):
+        all_field_filled = all(
+            input_field.text() for input_field in self.login_configuration_fields
+        )
+        self.ui.login_button.setEnabled(all_field_filled)
 
-    #     self.is_acquisition_running = True
-    #     self.progress_bar.setValue(0)
-    #     self.progress_bar.setHidden(False)
-    #     self.status_message.setText("")
-    #     self.status_message.setHidden(False)
+    def __enable_login_configuration_fields(self, enable):
+        for input_field in self.login_configuration_fields:
+            input_field.setEnabled(enable)
 
-    #     self.__enable_all(False)
-    #     self.__start_spinner()
+    def __uncheck_checkboxes(self):
+        for checkbox in self.ui.acquisition_criteria.findChildren(QtWidgets.QCheckBox):
+            if checkbox.isChecked():
+                checkbox.setChecked(False)
 
-    #     methods_to_execute = ["scrape_profile_picture", "scrape_info"]
-    #     checkboxes = self.acquisition_criteria.findChildren(QtWidgets.QCheckBox)
+    def __scraped_status(self, info):
 
-    #     checkboxes_checked = list(
-    #         filter(lambda checkbox: checkbox.isChecked(), checkboxes)
-    #     )
-    #     for checkbox in checkboxes_checked:
-    #         methods_to_execute.append(checkbox.objectName())
+        __acquisition_name = None
+        __method = info.get("method")
 
-    #     self.acquisition_manager.options["methods_to_execute"] = methods_to_execute
+        if __method == "scrape_profile_picture":
+            __acquisition_name = self.__translations["PROFILE_PIC"]
+        elif __method == "scrape_info":
+            __acquisition_name = [
+                self.__translations["FULL_NAME"],
+                self.__translations["BIO"],
+                self.__translations["POST_NUMBER"],
+                self.__translations["ACCOUNT_TYPE"],
+            ]
+        else:
+            checkbox = self.ui.acquisition_criteria.findChild(
+                QtWidgets.QCheckBox, info.get("method")
+            )
 
-    #     self.increment = 100 / len(methods_to_execute)
+            if checkbox:
+                __acquisition_name = checkbox.text()
 
-    #     # Create acquisition folder
-    #     auth_info = self.acquisition_manager.options.get("auth_info")
-    #     profile_dir = os.path.join(self.acquisition_directory, auth_info.get("profile"))
-    #     if not os.path.exists(profile_dir):
-    #         os.makedirs(profile_dir)
+        if __acquisition_name is not None:
 
-    #     self.acquisition_manager.options["profile_dir"] = profile_dir
-    #     self.acquisition_manager.scrape()
+            if isinstance(__acquisition_name, str):
+                label_text = self.__get_acquisition_label_text(
+                    __acquisition_name, info.get("status"), info.get("message")
+                )
+                self.__add_label_in_acquisition_status_list(label_text)
 
-    # def __acquisition_is_finished(self):
-    #     self.spinner.stop()
-    #     self.__enable_all(True)
-    #     self.login_configuration.setEnabled(True)
+            if isinstance(__acquisition_name, list):
+                for name in __acquisition_name:
+                    label_text = self.__get_acquisition_label_text(
+                        name, info.get("status"), info.get("message")
+                    )
+                    self.__add_label_in_acquisition_status_list(label_text)
 
-    #     self.acquisition_criteria.setEnabled(False)
-    #     self.acquisition_status.setEnabled(True)
-    #     self.start_acquisition_button.setEnabled(False)
-    #     self.scrape_saved_posts.setEnabled(True)
+    def __get_acquisition_label_text(
+        self, acquisition_name, acquisition_status, acquisition_message
+    ):
+        __status = (
+            '<strong style="color:green">{}</strong>'.format(acquisition_status)
+            if acquisition_status == Status.SUCCESS
+            else '<strong style="color:red">{}</strong>'.format(acquisition_status)
+        )
+        __message = (
+            ""
+            if acquisition_message == ""
+            else "details: {}".format(acquisition_message)
+        )
 
-    #     self.acquisition_manager.log_end_message()
-    #     self.acquisition_manager.set_completed_progress_bar()
-    #     self.acquisition_manager.unload_tasks()
+        return "Acquisition {}: {} {}".format(acquisition_name, __status, __message)
 
-    #     show_finish_acquisition_dialog(self.acquisition_directory)
-
-    #     self.progress_bar.setHidden(True)
-    #     self.status_message.setHidden(True)
-
-    #     self.acquisition_directory = None
-    #     self.is_task_started = False
-    #     self.is_acquisition_running = False
-
-    # def __handle_progress(self):
-    #     self.progress_bar.setValue(self.progress_bar.value() + int(self.increment))
-
-    # def __scraped_status(self, info):
-
-    #     __acquisition_name = None
-    #     __method = info.get("method")
-
-    #     if __method == "scrape_profile_picture":
-    #         __acquisition_name = instagram.PROFILE_PIC
-    #     elif __method == "scrape_info":
-    #         __acquisition_name = [
-    #             instagram.FULL_NAME,
-    #             instagram.BIO,
-    #             instagram.POST_NUMBER,
-    #             instagram.ACCOUNT_TYPE,
-    #         ]
-    #     else:
-    #         checkbox = self.acquisition_criteria.findChild(
-    #             QtWidgets.QCheckBox, info.get("method")
-    #         )
-
-    #         if checkbox:
-    #             __acquisition_name = checkbox.text()
-
-    #     if __acquisition_name is not None:
-
-    #         if isinstance(__acquisition_name, str):
-    #             label_text = self.__get_acquisition_label_text(
-    #                 __acquisition_name, info.get("status"), info.get("message")
-    #             )
-    #             self.__add_label_in_acquisition_status_list(label_text)
-
-    #         if isinstance(__acquisition_name, list):
-    #             for name in __acquisition_name:
-    #                 label_text = self.__get_acquisition_label_text(
-    #                     name, info.get("status"), info.get("message")
-    #                 )
-    #                 self.__add_label_in_acquisition_status_list(label_text)
-
-    # def __get_acquisition_label_text(
-    #     self, acquisition_name, acquisition_status, acquisition_message
-    # ):
-    #     __status = (
-    #         '<strong style="color:green">{}</strong>'.format(acquisition_status)
-    #         if acquisition_status == status.SUCCESS
-    #         else '<strong style="color:red">{}</strong>'.format(acquisition_status)
-    #     )
-    #     __message = (
-    #         ""
-    #         if acquisition_message == ""
-    #         else "details: {}".format(acquisition_message)
-    #     )
-
-    #     return "Acquisition {}: {} {}".format(acquisition_name, __status, __message)
-
-    # def __add_label_in_acquisition_status_list(self, label_text):
-    #     item = QtWidgets.QListWidgetItem(self.acquisition_status_list)
-    #     label = QtWidgets.QLabel(label_text)
-    #     label.setWordWrap(True)
-    #     item.setSizeHint(label.sizeHint())
-    #     self.acquisition_status_list.addItem(item)
-    #     self.acquisition_status_list.setItemWidget(item, label)
-
-    # def __enable_all(self, enable):
-    #     self.setEnabled(enable)
-
-    # def __start_spinner(self):
-    #     center_x = self.x() + self.width() / 2
-    #     center_y = self.y() + self.height() / 2
-    #     self.spinner.set_position(center_x, center_y)
-    #     self.spinner.start()
+    def __add_label_in_acquisition_status_list(self, label_text):
+        item = QtWidgets.QListWidgetItem(self.ui.acquisition_status_list)
+        label = QtWidgets.QLabel(label_text)
+        label.setWordWrap(True)
+        item.setSizeHint(label.sizeHint())
+        self.ui.acquisition_status_list.addItem(item)
+        self.ui.acquisition_status_list.setItemWidget(item, label)

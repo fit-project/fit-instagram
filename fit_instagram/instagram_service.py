@@ -6,15 +6,16 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # -----
 ######
-import locale
 import os
 import shutil
+import time
+from datetime import datetime, timezone
+from urllib.request import urlopen
 
 from fit_common.core import debug, get_context, log_exception
 from instaloader import Profile, instaloader
 
 from fit_instagram.lang import load_translations
-
 
 # Override default handle_429 behavior to manage error 429 by UI.
 # https://instaloader.github.io/module/instaloadercontext.html#instaloader.RateController
@@ -22,16 +23,42 @@ from fit_instagram.lang import load_translations
 # “Too many queries in the last time” is not an error.
 # It is a notice that the rate limit has almost been reached, according to Instaloader’s
 # own rate accounting mechanism.Instaloader allows to adjust the rate controlling behavior by overriding instaloader.RateController
+# instagram_service.py (o dove risiede la tua classe)
+
+
 class InstagramRateController(instaloader.RateController):
+
+    def __init__(self, ctx, *, max_wait_seconds: int = 300, min_wait_seconds: int = 5):
+        super().__init__(ctx)
+        self.max_wait_seconds = max_wait_seconds
+        self.min_wait_seconds = min_wait_seconds
+
     def handle_429(self, query_type: str) -> None:
-        __translations = load_translations()
-        raise Exception(__translations["HANDLE_429"])
+        waited = 0
+
+        while waited < self.max_wait_seconds:
+            try:
+                delay = self.get_sleep() or 0
+            except Exception:
+                delay = 0
+
+            delay = max(delay, self.min_wait_seconds)
+
+            time.sleep(delay)
+            return
+
+        from fit_instagram.lang import load_translations
+
+        __t = load_translations()
+        raise Exception(__t["HANDLE_429"])
 
 
 class InstagramService:
     def __init__(self):
         self.loader = instaloader.Instaloader(
-            rate_controller=lambda ctx: InstagramRateController(ctx)
+            rate_controller=lambda ctx: InstagramRateController(
+                ctx, max_wait_seconds=600, min_wait_seconds=10
+            )
         )
         self.profile = None
         self.profile_from_username = None
@@ -55,7 +82,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Login failed",
                 str(e),
                 context=get_context(self),
             )
@@ -75,7 +102,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape post failed",
                 str(e),
                 context=get_context(self),
             )
@@ -91,7 +118,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape stories failed",
                 str(e),
                 context=get_context(self),
             )
@@ -117,7 +144,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape followers failed",
                 str(e),
                 context=get_context(self),
             )
@@ -144,7 +171,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape followees failed",
                 str(e),
                 context=get_context(self),
             )
@@ -170,22 +197,28 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape saved posts failed",
                 str(e),
                 context=get_context(self),
             )
             raise Exception(e)
 
     def scrape_profile_picture(self):
-        locale.setlocale(locale.LC_ALL, "en_US")
         try:
-            self.__set_loader_dirname_pattern("profile_pic")
-            self.loader.download_profilepic(self.profile)
-            self.__set_loader_dirname_pattern()
+            target_dir = self.__make_scraped_type_directory("profile_pic")
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S_UTC")
+            filename = f"{ts}_profile_pic.jpg"
+            filepath = os.path.join(target_dir, filename)
+
+            pic_url = str(self.profile.profile_pic_url)
+
+            with urlopen(pic_url) as resp, open(filepath, "wb") as out:
+                shutil.copyfileobj(resp, out)
+
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Profile picture download failed",
                 str(e),
                 context=get_context(self),
             )
@@ -201,7 +234,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape tagged posts failed",
                 str(e),
                 context=get_context(self),
             )
@@ -247,7 +280,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Scrape highlights failed",
                 str(e),
                 context=get_context(self),
             )
@@ -284,7 +317,7 @@ class InstagramService:
             except Exception as e:
                 log_exception(e, context=get_context(self))
                 debug(
-                    "Check server capture failed",
+                    "Check account failed",
                     str(e),
                     context=get_context(self),
                 )
@@ -351,7 +384,7 @@ class InstagramService:
             except Exception as e:
                 log_exception(e, context=get_context(self))
                 debug(
-                    "Check server capture failed",
+                    "Logout failed",
                     str(e),
                     context=get_context(self),
                 )
@@ -362,7 +395,7 @@ class InstagramService:
         except Exception as e:
             log_exception(e, context=get_context(self))
             debug(
-                "Check server capture failed",
+                "Logout failed",
                 str(e),
                 context=get_context(self),
             )
@@ -371,7 +404,7 @@ class InstagramService:
             except Exception as e:
                 log_exception(e, context=get_context(self))
                 debug(
-                    "Check server capture failed",
+                    "Logout failed",
                     str(e),
                     context=get_context(self),
                 )
