@@ -11,7 +11,8 @@ import logging
 import os
 
 from fit_acquisition.class_names import class_names
-from fit_common.core import get_version
+from fit_acquisition.logger_names import LoggerName
+from fit_common.core import AcquisitionType, get_version
 from fit_common.gui.error import Error
 from fit_common.gui.spinner import Spinner
 from fit_common.gui.ui_translation import translate_ui
@@ -28,10 +29,10 @@ from fit_instagram.workers.logout import InstagramLogoutWorker
 
 class Instagram(Scraper):
     def __init__(self, wizard=None):
-        logger = logging.getLogger("scraper.instagram")
+        logger = logging.getLogger(LoggerName.SCRAPER_INSTAGRAM.value)
         packages = ["fit_instagram.tasks"]
 
-        super().__init__(logger, "instagram", packages, wizard)
+        super().__init__(logger, AcquisitionType.INSTAGRAM, packages, wizard)
 
         if self.has_valid_case:
             class_names.register("INSTAGRAM_SCRAPER", "TaskInstagramScraper")
